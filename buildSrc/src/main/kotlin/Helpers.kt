@@ -123,7 +123,7 @@ fun Project.setupAppCommon() {
         if (keystorePwd != null) {
             signingConfigs {
                 create("release") {
-                    storeFile = rootProject.file("release.keystore")
+                    storeFile = rootProject.file(System.getenv("KEYSTORE_FILE") ?: "release.keystore")
                     storePassword = keystorePwd
                     keyAlias = alias
                     keyPassword = pwd
@@ -205,6 +205,10 @@ fun Project.setupApp() {
                         .replace("-oss", "")
                 }
             }
+        }
+
+        applicationVariants.all {
+            resValue("string", "shortcut_target_package", applicationId)
         }
 
         for (abi in listOf("Arm64", "Arm", "X64", "X86")) {

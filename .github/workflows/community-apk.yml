@@ -1,0 +1,88 @@
+name: Community APK
+on:
+  push:
+    branches:
+      - nekobox-community
+    tags:
+      - 'nekobox-community-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: false
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Android build tools
+        run: sdkmanager --install 'platforms;android-35' 'build-tools;35.0.1' 'ndk;25.0.8775105'
+      - name: Compile native core
+        run: |
+          ./run lib core init
+          ./run lib core build
+      - name: Fetch rule assets
+        run: ./run init action gradle
+      - name: Build installable test APKs
+        if: github.event_name == 'push' && github.ref_type == 'branch'
+        env:
+          BUILD_PLUGIN: none
+        run: ./gradlew --no-daemon app:assembleOssDebug
+      - name: Build and sign APKs
+        if: github.event_name == 'workflow_dispatch' || github.ref_type == 'tag'
+        env:
+          BUILD_PLUGIN: none
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+          ALIAS_NAME: ${{ secrets.ALIAS_NAME }}
+          ALIAS_PASS: ${{ secrets.ALIAS_PASS }}
+        run: |
+          set -euo pipefail
+          : "${KEYSTORE_BASE64:?Configure a community signing keystore}"
+          : "${KEYSTORE_PASS:?Configure the keystore password}"
+          : "${ALIAS_NAME:?Configure the key alias}"
+          : "${ALIAS_PASS:?Configure the key password}"
+          export KEYSTORE_FILE="$RUNNER_TEMP/community.keystore"
+          trap 'rm -f -- "$KEYSTORE_FILE"' EXIT
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_FILE"
+          unset KEYSTORE_BASE64
+          ./gradlew --no-daemon app:assembleOssRelease
+      - name: Verify APK signatures and package names
+        env:
+          BUILD_TYPE: ${{ (github.event_name == 'push' && github.ref_type == 'branch') && 'debug' || 'release' }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          cd "app/build/outputs/apk/oss/$BUILD_TYPE"
+          apks=(./*.apk)
+          test "${#apks[@]}" -eq 4
+          tools="$ANDROID_HOME/build-tools/35.0.1"
+          package=moe.nb4a.community
+          if [ "$BUILD_TYPE" = debug ]; then
+            package+=.debug
+          fi
+          for apk in "${apks[@]}"; do
+            "$tools/apksigner" verify "$apk"
+            "$tools/aapt" dump badging "$apk" | sed -n '1p' | grep -F "package: name='$package'"
+          done
+          sha256sum "${apks[@]}" > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NekoBox-community-apks
+          path: |
+            app/build/outputs/apk/oss/*/*.apk
+            app/build/outputs/apk/oss/*/SHA256SUMS
+          if-no-files-found: error
