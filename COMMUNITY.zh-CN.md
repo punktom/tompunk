@@ -1,13 +1,13 @@
-# NekoBox Community 1.4.3-community.1
+# NekoBox Community 1.4.3-community.2
 
-基于 MatsuriDayo/NekoBoxForAndroid 1.4.2（5768494d8ae3c74a057bb6d46c0f8dc071b0d821），沿用该版本的原生核心。维护版的包名为 `moe.nb4a.community`，测试包则为 `moe.nb4a.community.debug`。两者均可与官方版并存，使用独立的数据。迁移时先在官方版导出备份。
+基于 MatsuriDayo/NekoBoxForAndroid 1.4.2（5768494d8ae3c74a057bb6d46c0f8dc071b0d821），根据 MatsuriDayo/NekoBoxForAndroid PR #1213 迁移到 sing-box 1.14.3（带 NekoBox 兼容补丁）。需要 Android 6.0 及以上。旧版自定义 sing-box JSON 可能需要迁移 DNS、TUN 和 WireGuard 字段。维护版的包名为 `moe.nb4a.community`，测试包则为 `moe.nb4a.community.debug`。两者均可与官方版并存，使用独立的数据。迁移时先在官方版导出备份。
 
 ## 在 punktom/tompunk 构建测试 APK
 
 收到 Git bundle 后，在你自己的终端运行以下两条命令。请先切换到 bundle 文件所在目录。需要能够以 GitHub 账号向目标仓库推送工作流文件。
 
 ```powershell
-git clone --branch nekobox-community ./NekoBox-1.4.3-community.1.bundle NekoBox-community
+git clone --branch nekobox-community ./NekoBox-1.4.3-community.2.bundle NekoBox-community
 git -C NekoBox-community push https://github.com/punktom/tompunk.git refs/heads/nekobox-community:refs/heads/nekobox-community
 ```
 
@@ -30,4 +30,4 @@ keytool -genkeypair -v -keystore community.p12 -storetype PKCS12 -alias communit
 - `ALIAS_NAME`：密钥别名，例如 `community`。
 - `ALIAS_PASS`：密钥密码；上述 PKCS12 命令通常使用与文件相同的密码。
 
-配置后，从分支同一提交创建并推送名为 `nekobox-community-v1.4.3-community.1` 的标签。工作流会构建正式 APK 并上传到同一个 Actions 产物列表。它不会创建 GitHub Release。
+配置后，从分支同一提交创建并推送名为 `nekobox-community-v1.4.3-community.2` 的标签。工作流会构建正式 APK 并上传到同一个 Actions 产物列表。它不会创建 GitHub Release。

@@ -24,7 +24,7 @@ jobs:
           java-version: '17'
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25.x'
+          go-version: '1.26.5'
           cache: false
       - uses: gradle/actions/setup-gradle@v4
       - name: Install Android build tools
@@ -43,18 +43,16 @@ jobs:
             echo "::error::Android SDK manager not found under $ANDROID_HOME"
             exit 1
           fi
-          "$sdkmanager_path" --sdk_root="$ANDROID_HOME" --install 'platforms;android-35' 'build-tools;35.0.1' 'ndk;25.0.8775105'
+          "$sdkmanager_path" --sdk_root="$ANDROID_HOME" --install 'platforms;android-37.0' 'build-tools;36.1.0' 'ndk;29.0.14206865'
       - name: Compile native core
-        run: |
-          ./run lib core init
-          ./run lib core build
+        run: ./run lib core
       - name: Fetch rule assets
         run: ./run init action gradle
       - name: Build installable test APKs
         if: github.event_name == 'push' && github.ref_type == 'branch'
         env:
           BUILD_PLUGIN: none
-        run: ./gradlew --no-daemon app:assembleOssDebug
+        run: ./gradlew --no-daemon app:testOssDebugUnitTest app:assembleOssDebug
       - name: Build and sign APKs
         if: github.event_name == 'workflow_dispatch' || github.ref_type == 'tag'
         env:
@@ -84,7 +82,7 @@ jobs:
           cd "app/build/outputs/apk/oss/$BUILD_TYPE"
           apks=(./*.apk)
           test "${#apks[@]}" -eq 4
-          tools="$ANDROID_HOME/build-tools/35.0.1"
+          tools="$ANDROID_HOME/build-tools/36.1.0"
           package=moe.nb4a.community
           if [ "$BUILD_TYPE" = debug ]; then
             package+=.debug
@@ -93,7 +91,23 @@ jobs:
             "$tools/apksigner" verify "$apk"
             "$tools/aapt" dump badging "$apk" | sed -n '1p' | grep -F "package: name='$package'"
           done
-          sha256sum "${apks[@]}" > SHA256SUMS
+          for abi in arm64-v8a x86_64; do
+            apk=(./*"$abi"*.apk)
+            test "${#apk[@]}" -eq 1
+            unzip -p "${apk[0]}" "lib/$abi/libgojni.so" > "$RUNNER_TEMP/libgojni-$abi.so"
+            alignments="$(readelf -lW "$RUNNER_TEMP/libgojni-$abi.so" | awk '$1 == "LOAD" {print $NF}')"
+            test -n "$alignments"
+            while IFS= read -r alignment; do
+              (( alignment >= 16384 ))
+            done <<< "$alignments"
+          done
+          version="$(sed -n 's/^VERSION_NAME=//p' "$GITHUB_WORKSPACE/nb4a.properties")"
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+            apk=(./*-"$abi"-*.apk)
+            test "${#apk[@]}" -eq 1
+            mv -- "${apk[0]}" "NekoBox-$version-$abi-$BUILD_TYPE.apk"
+          done
+          sha256sum ./*.apk > SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: NekoBox-community-apks
