@@ -28,7 +28,22 @@ jobs:
           cache: false
       - uses: gradle/actions/setup-gradle@v4
       - name: Install Android build tools
-        run: sdkmanager --install 'platforms;android-35' 'build-tools;35.0.1' 'ndk;25.0.8775105'
+        run: |
+          set -euo pipefail
+          sdkmanager_path="$(command -v sdkmanager || true)"
+          if [ -z "$sdkmanager_path" ]; then
+            for candidate in "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager; do
+              if [ -x "$candidate" ]; then
+                sdkmanager_path="$candidate"
+                break
+              fi
+            done
+          fi
+          if [ ! -x "$sdkmanager_path" ]; then
+            echo "::error::Android SDK manager not found under $ANDROID_HOME"
+            exit 1
+          fi
+          "$sdkmanager_path" --sdk_root="$ANDROID_HOME" --install 'platforms;android-35' 'build-tools;35.0.1' 'ndk;25.0.8775105'
       - name: Compile native core
         run: |
           ./run lib core init
